@@ -8,17 +8,18 @@ import pandas as pd
 
 
 '''
+Input Carmen Files: 
+- Bernese_CF_database2      --> Manually modified: SCILD ID completed and names/surname format (also blanks)
+- Demographics2             --> Manually modified: names/surname format (also blanks)
+- Start- und Enddaten CF Medikation
+- UID_Name_BiDate_Sex_Study
 
-Remo Gäggeler --> in Bernese 2019, in SCILD 2017
-Lara Zosso --> difference in birthdate also
+Output:
+- merged table: complete version that is then modified by deleting columns and changing names in excel
 
-Bernese_CF_database2 was modified --> names and SCILD ID
-Demographics2 and Start- und Enddaten CF Medikation were modified --> names
-
-to do: 
-- which study --> more clear
-- change sex (SCILD and Bernese are different)
-
+WARNING: 
+- Remo Gäggeler --> in Bernese 2019, in SCILD 2017
+- Lara Zosso --> difference in birthdate
 '''
 def write_excel(df,path, fileName):
     output_name = Path(fileName + '.xlsx')
@@ -100,13 +101,31 @@ if __name__ == '__main__':
     path_save = r'L:\KKM_LuFu\OfficeData\Biomedical Engineers\Lea\02.Documentation\Data Management\Carmen Data Trikafta\results'
     save_Demo2_Medik_merged = 1
     save_UID_Bernese_merged = 1
-    save_Medik_UIDs = 1
+    save_Medik_UIDs_merged = 1
 
     Bernese_pats = pd.read_excel(os.path.join(path_read, r'Bernese_CF_database2.xlsx'))
     SCILD_pats = pd.read_excel(os.path.join(path_read, r'UID_Name_BiDate_Sex_Study.xlsx'))
+
+    # add column which study
+    Bernese_pats = Bernese_pats.assign(from_Bernese_DB= np.ones(len(Bernese_pats)))
+    SCILD_pats = SCILD_pats.assign(from_SCILD_DB= np.ones(len(SCILD_pats)))
+
+    # change sex to female and male
+    for idx, row in Bernese_pats.iterrows():
+        if row['patGender'] == 1:
+            Bernese_pats.at[idx, 'patGender'] = 'female'
+        if row['patGender'] == 0:
+            Bernese_pats.at[idx, 'patGender'] = 'male'
+
+    for idx, row in SCILD_pats.iterrows():
+        if row['patPersSex'] == 1:
+            SCILD_pats.at[idx, 'patPersSex'] = 'male'
+        if row['patPersSex'] == 0:
+            SCILD_pats.at[idx, 'patPersSex'] = 'female'
+
     Demo2_Medik_merged = merge_Demo2_Medik(pd.read_excel(os.path.join(path_read, r'Demographics2.xlsx')), pd.read_excel(os.path.join(path_read, r'Start- und Enddaten CF Medikation.xlsx')))
 
-    UID_Bernese_merged = SCILD_pats.merge(Bernese_pats, how='outer', left_on=['UID'], right_on=['SCILD_correctedLHD'], indicator=True)
+    UID_Bernese_merged = SCILD_pats.merge(Bernese_pats, how='outer', left_on=['UID'], right_on=['SCILD_correctedLHD'])
 
 
     # fill up the DOB, Last Name and First Name column
@@ -127,8 +146,18 @@ if __name__ == '__main__':
         UID_Bernese_merged.at[idx, 'patNaSirName'] = UID_Bernese_merged.at[idx, 'patNaSirName']
 
 
+    final_Medik_UID_merged = UID_Bernese_merged.merge(Demo2_Medik_merged, how='outer', left_on=['patNaFirstName', 'patNaSirName'], right_on=['FirstName','LastName'])
 
-    final_Medik_UID = UID_Bernese_merged.merge(Demo2_Medik_merged, how='outer', left_on=['patNaFirstName', 'patNaSirName'], right_on=['FirstName','LastName'], indicator='second_indicator')
+    # merge gender columns
+    for idx, row in final_Medik_UID_merged.iterrows():
+        if not pd.isnull(row['patGender']):
+            if pd.isnull(row['patPersSex']):
+                final_Medik_UID_merged.at[idx, 'patPersSex'] = row['patGender']
+            else:
+                if not (row['patGender'] == row['patPersSex']):
+                    print('WARNING: GENDER DONT CORRESPOND FOR ', row['patNaFirstName'], row['patNaSirName'])
+
+
 
     if save_Demo2_Medik_merged:
         write_excel(Demo2_Medik_merged, path_save, 'Demographics2_StartEnddatenMedikation_merged')
@@ -136,8 +165,8 @@ if __name__ == '__main__':
     if save_UID_Bernese_merged:
         write_excel(UID_Bernese_merged, path_save, 'UID_Bernese_merged')
 
-    if save_Medik_UIDs:
-        write_excel(final_Medik_UID, path_save, 'final_Medik_UID')
+    if save_Medik_UIDs_merged
+        write_excel(final_Medik_UID_merged, path_save, 'final_Medik_UID_merged')
 
 
 
